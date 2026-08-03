@@ -17,9 +17,9 @@ void menuPorts()
         menuPortsUsb();
     }
     else if ((productVariant == RTK_EVK) || (productVariant == RTK_POSTCARD)
-             || (productVariant == RTK_FACET_FP))
+             || (productVariant == RTK_FACET_FP) || (productVariant == RTK_S3))
     {
-        // RTK EVK, Postcard, Facet FP
+        // RTK EVK, Postcard, Facet FP, S3
         menuPortsNoMux();
     }
     else
@@ -92,7 +92,7 @@ void menuPortsNoMux()
                                                         : "Enabled"); // Reverse disabled/enabled to align with prompt
             }
         }
-        else if (productVariant == RTK_POSTCARD)
+        else if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
         {
             systemPrintf("4) Allow incoming corrections on RADIO port: %s\r\n",
                          settings.enableExtCorrRadio ? "Enabled" : "Disabled");

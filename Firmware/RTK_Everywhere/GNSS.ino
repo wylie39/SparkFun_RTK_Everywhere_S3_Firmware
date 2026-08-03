@@ -758,7 +758,7 @@ void gnssBoot()
     {
         gpioExpanderGnssBoot(); // Drive the GNSS reset pin high
     }
-    else if (productVariant == RTK_POSTCARD)
+    else if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
     {
         digitalWrite(pin_GNSS_Reset, HIGH); // Tell LG290P to boot
     }
@@ -781,7 +781,7 @@ void gnssReset()
     {
         gpioExpanderGnssReset(); // Drive the GNSS reset pin low
     }
-    else if (productVariant == RTK_POSTCARD)
+    else if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
     {
         digitalWrite(pin_GNSS_Reset, LOW); // Tell LG290P to reset
     }

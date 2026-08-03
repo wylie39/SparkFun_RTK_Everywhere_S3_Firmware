@@ -2877,7 +2877,7 @@ bool settingAvailableOnPlatform(int i)
             break;
         if ((productVariant == RTK_TORCH) && rtkSettingsEntries[i].platTorch)
             break;
-        if ((productVariant == RTK_POSTCARD) && rtkSettingsEntries[i].platPostcard)
+        if ((productVariant == RTK_POSTCARD || productVariant == RTK_S3) && rtkSettingsEntries[i].platPostcard)
             break;
         if (productVariant == RTK_FACET_FP)
         {
@@ -2940,7 +2940,7 @@ bool settingPossibleOnPlatform(int i)
             break;
         if ((productVariant == RTK_TORCH) && rtkSettingsEntries[i].platTorch)
             break;
-        if ((productVariant == RTK_POSTCARD) && rtkSettingsEntries[i].platPostcard)
+        if ((productVariant == RTK_POSTCARD || productVariant == RTK_S3) && rtkSettingsEntries[i].platPostcard)
             break;
         if ((productVariant == RTK_FACET_FP) && (rtkSettingsEntries[i].platFacetFP > NON))
             break;

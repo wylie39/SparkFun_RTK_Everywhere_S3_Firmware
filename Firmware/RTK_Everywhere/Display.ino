@@ -173,6 +173,19 @@ void beginDisplay(TwoWire *i2cBus)
         oled->setPreCharge(0xF1);    // Set Pre-charge Period (D9h)
         oled->setVcomDeselect(0x40); // Set VCOMH Deselect Level (DBh)
         oled->setContrast(0xCF);     // Set Contrast Control for BANK0 (81h)
+
+        if (productVariant == RTK_S3)
+        {
+            // RTK_S3 uses a SH1106-based 1.3" OLED instead of the stock SSD1306. This driver
+            // already talks to the display in SSD1306 page addressing mode (see
+            // QwGrSSD1306::setupOLEDDevice/setScreenBufferAddress), which SH1106 also supports
+            // (patched to be pixel-accurate - see Tools/patch_qwiic_oled_offset.py). SH1106 has
+            // 132 columns of GDDRAM but only 128 are wired to the visible glass, centered with
+            // a 2-column offset, so shift the column address window to compensate.
+            oled->setXOffset(2);
+            i2cAddress = 0x3C; // Most common SH1106 module address - verify with an I2C scan
+                               // (menu option to list I2C devices) if the display doesn't come up
+        }
     }
 
     // Display may still be powering up

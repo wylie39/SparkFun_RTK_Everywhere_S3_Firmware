@@ -225,7 +225,7 @@ void checkGNSSArrayDefaults()
         if (settings.enableExtCorrRadio == 254)
         {
             defaultsApplied = true;
-            if (productVariant == RTK_POSTCARD)
+            if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
                 // User has to enable UART3 (JST) manually for the same reason as LG290P on FP
                 settings.enableExtCorrRadio = false;
             else if (productVariant == RTK_FACET_FP)
@@ -521,6 +521,13 @@ bool getFileLineSD(const char *fileName, int lineToFind, char *lineData, int lin
 // Select the Bluetooth protocol
 BluetoothRadioType_e mmChangeBluetoothProtocol(BluetoothRadioType_e bluetoothUserChoice)
 {
+#if CONFIG_IDF_TARGET_ESP32S3
+    // ESP32-S3 has no Bluetooth Classic (BR/EDR) radio - only cycle between BLE and Off
+    if (bluetoothUserChoice == BLUETOOTH_RADIO_BLE)
+        bluetoothUserChoice = BLUETOOTH_RADIO_OFF;
+    else
+        bluetoothUserChoice = BLUETOOTH_RADIO_BLE;
+#else  // !CONFIG_IDF_TARGET_ESP32S3
     // Change Bluetooth protocol
     if (bluetoothUserChoice == BLUETOOTH_RADIO_SPP_AND_BLE)
         bluetoothUserChoice = BLUETOOTH_RADIO_SPP;
@@ -530,6 +537,7 @@ BluetoothRadioType_e mmChangeBluetoothProtocol(BluetoothRadioType_e bluetoothUse
         bluetoothUserChoice = BLUETOOTH_RADIO_OFF;
     else if (bluetoothUserChoice == BLUETOOTH_RADIO_OFF)
         bluetoothUserChoice = BLUETOOTH_RADIO_SPP_AND_BLE;
+#endif // CONFIG_IDF_TARGET_ESP32S3
     return bluetoothUserChoice;
 }
 

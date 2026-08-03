@@ -2,6 +2,9 @@
 
 partitions.csv
 
+# Output of Firmware/compile_s3_with_docker.sh
+Firmware/build_output_s3/
+
 tokens.h
 .vscode/*
 

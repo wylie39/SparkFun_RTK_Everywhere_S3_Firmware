@@ -88,7 +88,8 @@ RTK_Everywhere.ino
 #define COMPILE_CELLULAR // Comment out to remove cellular modem support
 #define COMPILE_LORA     // COmment out to remove LoRa functionality
 
-#ifdef COMPILE_BT
+#if defined(COMPILE_BT) && !CONFIG_IDF_TARGET_ESP32S3
+// Apple MFi accessory mode (iAP2) requires Bluetooth Classic (SPP), which ESP32-S3 does not have.
 #define COMPILE_AUTHENTICATION // Uncomment to enable MFi authentication (uses Private libraries)
 #endif
 
