@@ -198,13 +198,14 @@ typedef enum
     RTK_POSTCARD = 5, // 0x05
     RTK_FACET_FP = 6, // 0x06
     RTK_TORCH_X2 = 7, // 0x07
+    RTK_S3 = 8, // 0x08 - Custom ESP32-S3-N16R8 / LG290P / SH1106 build
     // Add new values above this line
     RTK_UNKNOWN
 } ProductVariant;
 ProductVariant productVariant = RTK_UNKNOWN;
 
 // Must match the contents of ProductVariant
-static const ProductVariant allVariants[] = { RTK_EVK, RTK_FACET_MOSAIC, RTK_TORCH, RTK_POSTCARD, RTK_FACET_FP, RTK_TORCH_X2, RTK_UNKNOWN};
+static const ProductVariant allVariants[] = { RTK_EVK, RTK_FACET_MOSAIC, RTK_TORCH, RTK_POSTCARD, RTK_FACET_FP, RTK_TORCH_X2, RTK_S3, RTK_UNKNOWN};
 #define productVariantCount (sizeof(allVariants) / sizeof(allVariants[0]))
 
 typedef enum
@@ -215,6 +216,7 @@ typedef enum
     RTK_HOUSING_POSTCARD,   // Postcard with SPK-6E helical
     RTK_HOUSING_TORCH,      // Torch - with tilt
     RTK_HOUSING_TX2,        // Torch X2 - no tilt
+    RTK_HOUSING_S3,         // Custom ESP32-S3 Postcard build
     // Add new housing variants above this line
     RTK_HOUSING_MAX_NONE,
 } ProductVariantHousing;
@@ -237,6 +239,7 @@ const productHousingProperties productHousingPropertiesTable[] =
     {RTK_HOUSING_POSTCARD,  37.5,   false,  "", "", ""}, // APC of SPK-6E helical L1/L2/L5 antenna
     {RTK_HOUSING_TORCH,     129.0,  true,   "LEVER_ARM=-0.00678,-0.01073,-0.0314", "", "GNSS_CARD=UNICORE"}, // Default to Torch helical APC, NGS calibrated average of L1/L2
     {RTK_HOUSING_TX2,       129.0,  false,  "", "", ""}, // Default to Torch helical APC, NGS calibrated average of L1/L2
+    {RTK_HOUSING_S3,        37.5,   false,  "", "", ""}, // Starting default: same as Postcard's SPK-6E helical - tune for your build
     {RTK_HOUSING_MAX_NONE,  0.0,    false,  "", "", ""},
 };
 const int productHousingEntries = sizeof(productHousingPropertiesTable) / sizeof(productHousingPropertiesTable[0]);
@@ -282,6 +285,7 @@ const productProperties productPropertiesTable[] =
     { RTK_POSTCARD,         BRAND_SPARKFUN, RTK_HOUSING_POSTCARD,   "Postcard",     "Postcard", "SFE_Postcard",         "Postcard",         true,   "e9e877bb278140f0", STATE_ROVER_NOT_STARTED,    "https://www.sparkfun.com/rtk_postcard_registration" },
     { RTK_TORCH,            BRAND_SPARKPNT, RTK_HOUSING_TORCH,      "Torch",        "Torch",    "SFE_Torch",            "Torch",            true,   "0000000000000000", STATE_ROVER_NOT_STARTED,    "https://www.sparkfun.com/rtk_torch_registration" },
     { RTK_TORCH_X2,         BRAND_SPARKPNT, RTK_HOUSING_TX2,        "TX2",          "TX2",      "SFE_TX2",              "TX2",              false,  "3407c7ca3d6b4984", STATE_ROVER_NOT_STARTED,    "https://www.sparkfun.com/tx2_registration" },
+    { RTK_S3,               BRAND_SPARKFUN, RTK_HOUSING_S3,         "S3",           "RTK S3",   "SFE_S3",               "S3",               true,   "0000000000000000", STATE_ROVER_NOT_STARTED,    "" },
     { RTK_UNKNOWN,          DEFAULT_BRAND,  RTK_HOUSING_MAX_NONE,   "Unknown",      "Unknown",  "SFE_Unknown",          "Unknown",          true,   "0000000000000000", STATE_ROVER_NOT_STARTED,    "Unknown" },
 };
 const int productPropertiesEntries = sizeof(productPropertiesTable) / sizeof(productPropertiesTable[0]);
@@ -789,7 +793,12 @@ struct Settings
 
     // Bluetooth
     double accessoryTimeOffset_s = -1.0; // Apply this offset to EA NMEA data via utcAdjust
+#if CONFIG_IDF_TARGET_ESP32S3
+    // ESP32-S3 has no Bluetooth Classic (BR/EDR) radio - default to BLE only
+    BluetoothRadioType_e bluetoothRadioType = BLUETOOTH_RADIO_BLE;
+#else  // !CONFIG_IDF_TARGET_ESP32S3
     BluetoothRadioType_e bluetoothRadioType = BLUETOOTH_RADIO_SPP_AND_BLE;
+#endif // CONFIG_IDF_TARGET_ESP32S3
     bool clearBtPairings = true; // Clear MFi Accessory SSP pairings
     char eaProtocol[50] = "com.sparkfun.rtk"; // MFi External Accessory protocol name
     uint16_t sppRxQueueSize = 512 * 4;

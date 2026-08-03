@@ -103,6 +103,16 @@ RUN arduino-cli lib install "SparkFun Toolkit"@1.0.6
 
 # ===========================================================================================
 
+# Target board. Override to build for other MCUs/boards supported by the esp32:esp32 core,
+# e.g. --build-arg BUILD_FQBN=esp32:esp32:esp32s3 for an ESP32-S3 build.
+# Placed here (rather than up with the other ARGs) so overriding it doesn't bust the cache
+# for the slow arduino-cli/core/library install layers above.
+ARG BUILD_FQBN=esp32:esp32:esp32
+ARG BUILD_BOARD_OPTIONS=PSRAM=enabled
+ARG BUILD_MAX_SIZE=4055040
+# arduino-cli names the build output dir after the FQBN with ':' replaced by '.'
+ARG BUILD_OUTPUT_DIR=esp32.esp32.esp32
+
 # Copy RTK_Everywhere and build deployment image
 FROM upstream AS deployment
 
@@ -166,6 +176,13 @@ RUN cd ./Tools \
 # Patch ESP32_BleSerial - remove the BLE multiple write characteristics
 RUN sed -i 's|txCharacteristic->setWriteNoResponseProperty(true)|//txCharacteristic->setWriteNoResponseProperty(true)|g' /root/Arduino/libraries/ESP32_BleSerial/src/BleBufferedSerial.cpp
 
+# Patch SparkFun_Qwiic_OLED's column-offset math to be pixel-accurate (needed for SH1106
+# displays). Only applied for ESP32-S3 builds so the stock Micro OLED (DISPLAY_64x48,
+# used by Torch/Facet on classic ESP32) is untouched.
+RUN if echo "${BUILD_FQBN}" | grep -q esp32s3; then \
+    python3 ./Tools/patch_qwiic_oled_offset.py /root/Arduino/libraries/SparkFun_Qwiic_OLED_Arduino_Library/src/qwiic_grssd1306.cpp ; \
+    else echo "Skipping SH1106 offset patch (not an ESP32-S3 build)" ; fi
+
 # Copy custom RTKEverywhere.csv
 # Use the 16MB version
 RUN cp RTKEverywhere.csv "/root/.arduino15/packages/esp32/hardware/esp32/${CORE_VERSION}/tools/partitions/RTKEverywhere.csv"
@@ -174,11 +191,11 @@ RUN cp RTKEverywhere.csv "/root/.arduino15/packages/esp32/hardware/esp32/${CORE_
 
 # Compile Sketch
 RUN cd ./RTK_Everywhere \
-    && arduino-cli compile --fqbn "esp32:esp32:esp32":DebugLevel=${DEBUG_LEVEL},PSRAM=enabled \
+    && arduino-cli compile --fqbn "${BUILD_FQBN}":DebugLevel=${DEBUG_LEVEL},${BUILD_BOARD_OPTIONS} \
     --warnings ${WARNINGS} \
     ./RTK_Everywhere.ino \
     --build-property build.partitions=RTKEverywhere \
-    --build-property upload.maximum_size=4055040 \
+    --build-property upload.maximum_size=${BUILD_MAX_SIZE} \
     --build-property "compiler.cpp.extra_flags=-MMD -c \
     \"-DPOINTPERFECT_IP_TOKEN=${POINTPERFECT_IP_TOKEN}\" \
     \"-DPOINTPERFECT_RTCM_TOKEN=${POINTPERFECT_RTCM_TOKEN}\"  \
@@ -191,5 +208,5 @@ RUN cd ./RTK_Everywhere \
 
 # Copy the compile output. List the files
 FROM deployment AS output
-COPY --from=deployment ./RTK_Everywhere/build/esp32.esp32.esp32 /
+COPY --from=deployment ./RTK_Everywhere/build/${BUILD_OUTPUT_DIR} /
 CMD echo $(ls /*.*)

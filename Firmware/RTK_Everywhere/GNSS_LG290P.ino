@@ -695,7 +695,7 @@ bool GNSS_LG290P::setBaudRate(uint8_t uartNumber, uint32_t baudRate)
 uint32_t GNSS_LG290P::getDataBaudRate()
 {
     uint8_t dataUart = 0;
-    if (productVariant == RTK_POSTCARD)
+    if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
     {
         // UART1 of the LG290P is connected to USB CH342 (Port B)
         // This is nicknamed the DATA port
@@ -732,7 +732,7 @@ bool GNSS_LG290P::setBaudRateData(uint32_t baud)
         }
         else
         {
-            if (productVariant == RTK_POSTCARD)
+            if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
             {
                 // UART1 of the LG290P is connected to USB CH342 (Port B)
                 // This is nicknamed the DATA port
@@ -763,7 +763,7 @@ bool GNSS_LG290P::setBaudRateData(uint32_t baud)
 uint32_t GNSS_LG290P::getRadioBaudRate()
 {
     uint8_t radioUart = 0;
-    if (productVariant == RTK_POSTCARD)
+    if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
     {
         // UART3 of the LG290P is connected to the locking JST connector labled RADIO
         radioUart = 3;
@@ -799,7 +799,7 @@ bool GNSS_LG290P::setBaudRateRadio(uint32_t baud)
         else
         {
             uint8_t radioUart = 0;
-            if (productVariant == RTK_POSTCARD)
+            if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
             {
                 // UART3 of the LG290P is connected to the locking JST connector labled RADIO
                 radioUart = 3;
@@ -1960,7 +1960,7 @@ bool GNSS_LG290P::setBaudRateComm(uint32_t baud)
         else
         {
             uint8_t commUart = 0;
-            if (productVariant == RTK_POSTCARD)
+            if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
             {
                 // UART2 of the LG290P is connected to the ESP32 for the main config/comm
                 commUart = 2;
@@ -1990,7 +1990,7 @@ bool GNSS_LG290P::setBaudRateComm(uint32_t baud)
 uint32_t GNSS_LG290P::getCommBaudRate()
 {
     uint8_t commUart = 0;
-    if (productVariant == RTK_POSTCARD)
+    if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
     {
         // On the Postcard, the ESP32 UART1 is connected to LG290P UART2
         commUart = 2;
@@ -2045,7 +2045,7 @@ bool GNSS_LG290P::setCorrRadioExtPort(bool enable, bool force)
         if (force || (enable != _corrRadioExtPortEnabled))
         {
             uint8_t radioUart = 0;
-            if (productVariant == RTK_POSTCARD)
+            if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
             {
                 // UART3 of the LG290P is connected to the locking JST connector labled RADIO
                 radioUart = 3;
@@ -2244,7 +2244,7 @@ bool GNSS_LG290P::setMessagesNMEA()
                 // On Facet FP LG290P with Tilt: UART3 feeds the IMU. GGA/GST/RMC will be enabled below.
                 //                               It is OK to disable it here.
                 // On Facet FP: disable NMEA on portNumber 2 if enableNmeaOnRadio is false or enableLora is true
-                if (productVariant == RTK_POSTCARD)
+                if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
                 {
                     if ((portNumber == 3) && (settings.enableNmeaOnRadio == false))
                         msgRate = 0;

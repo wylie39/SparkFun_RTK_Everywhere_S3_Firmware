@@ -490,6 +490,8 @@ void deviceNameUnderscoresToSpaces()
 
 // Callback for Service Discovery Protocol
 // This allows the iAP2 record to be created _after_ SDP is initialized
+// SDP is part of classic Bluetooth (BR/EDR), which does not exist on ESP32-S3.
+#if !CONFIG_IDF_TARGET_ESP32S3
 extern const int rfcommChanneliAP2;
 extern volatile bool sdpCreateRecordEvent;
 static void esp_sdp_callback(esp_sdp_cb_event_t event, esp_sdp_cb_param_t *param)
@@ -542,6 +544,7 @@ static void esp_sdp_callback(esp_sdp_cb_event_t event, esp_sdp_cb_param_t *param
         break;
     }
 }
+#endif // !CONFIG_IDF_TARGET_ESP32S3
 
 // Begin Bluetooth
 void bluetoothStart()
@@ -554,6 +557,14 @@ void bluetoothStartSkipOnlineCheck()
 }
 void bluetoothStart(bool onlineCheck)
 {
+#if CONFIG_IDF_TARGET_ESP32S3
+    // ESP32-S3 has no Bluetooth Classic (BR/EDR) radio. Force BLE-only if a settings file
+    // written by a classic-capable build (or a stale default) requested SPP.
+    if (settings.bluetoothRadioType == BLUETOOTH_RADIO_SPP_AND_BLE ||
+        settings.bluetoothRadioType == BLUETOOTH_RADIO_SPP)
+        settings.bluetoothRadioType = BLUETOOTH_RADIO_BLE;
+#endif // CONFIG_IDF_TARGET_ESP32S3
+
     if (settings.bluetoothRadioType == BLUETOOTH_RADIO_OFF)
         return;
 
@@ -574,6 +585,7 @@ void bluetoothStart(bool onlineCheck)
     bluetoothState = BT_OFF; // Indicate to tasks that BT is unavailable
 
     // Select Bluetooth setup
+#if !CONFIG_IDF_TARGET_ESP32S3
     if (settings.bluetoothRadioType == BLUETOOTH_RADIO_SPP_AND_BLE)
     {
         if (bluetoothSerialSpp == nullptr)
@@ -588,7 +600,9 @@ void bluetoothStart(bool onlineCheck)
         if (bluetoothSerialSpp == nullptr)
             bluetoothSerialSpp = new BTClassicSerial();
     }
-    else if (settings.bluetoothRadioType == BLUETOOTH_RADIO_BLE)
+    else
+#endif // !CONFIG_IDF_TARGET_ESP32S3
+    if (settings.bluetoothRadioType == BLUETOOTH_RADIO_BLE)
     {
         if (bluetoothSerialBle == nullptr)
             bluetoothSerialBle = new BTLESerial();
@@ -639,9 +653,11 @@ void bluetoothStart(bool onlineCheck)
                 recordSystemSettings();
             }
 
+#if !CONFIG_IDF_TARGET_ESP32S3
             // The SDP callback will create the iAP2 record
             esp_sdp_register_callback(esp_sdp_callback);
             esp_sdp_init();
+#endif // !CONFIG_IDF_TARGET_ESP32S3
         }
 
         beginSuccess &= bluetoothSerialBle->begin(

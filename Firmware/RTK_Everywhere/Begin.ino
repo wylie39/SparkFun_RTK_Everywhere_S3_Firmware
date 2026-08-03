@@ -81,6 +81,13 @@ void identifyBoard()
 
     if (productVariant == RTK_UNKNOWN)
     {
+#if CONFIG_IDF_TARGET_ESP32S3
+        // Custom ESP32-S3-N16R8 / LG290P / SH1106 build.
+        // GPIO35 (used for the ID resistor divider on the ESP32-PICO-MINI-02 design)
+        // is reserved for octal PSRAM on the N16R8 module and is not available here,
+        // so there is no ID resistor divider on this board. Fix the variant instead.
+        productVariant = RTK_S3;
+#else  // !CONFIG_IDF_TARGET_ESP32S3
         // Use ADC to check the resistor divider
         int pin_deviceID = 35;
         uint16_t idValue = analogReadMilliVolts(pin_deviceID);
@@ -116,6 +123,7 @@ void identifyBoard()
         // Torch X2: 8.2/3.3  -->  836mV < 947mV < 1067mV (8.5% tolerance)
         else if (idWithAdc(idValue, 8.2, 3.3, 8.5))
             productVariant = RTK_TORCH_X2;
+#endif // CONFIG_IDF_TARGET_ESP32S3
     }
 
     if (ENABLE_DEVELOPER)
@@ -537,6 +545,82 @@ void beginBoard()
 
         pin_bluetoothStatusLED = 4; // Blue LED
         pin_gnssStatusLED = 0;      // Green LED
+
+        // Turn on Bluetooth and GNSS LEDs to indicate power on
+        pinMode(pin_bluetoothStatusLED, OUTPUT);
+        bluetoothLedOn();
+        pinMode(pin_gnssStatusLED, OUTPUT);
+        gnssStatusLedOn();
+
+        pinMode(pin_GNSS_TimePulse, INPUT);
+
+        pinMode(pin_GNSS_Reset, OUTPUT);
+        gnssBoot(); // Tell LG290P to boot
+
+        // Disable the microSD card
+        pinMode(pin_microSD_CS, OUTPUT);
+        sdDeselectCard();
+    }
+
+    else if (productVariant == RTK_S3)
+    {
+        // Custom ESP32-S3-N16R8 / LG290P / SH1106 build - same design as RTK_POSTCARD,
+        // but on different silicon so with its own pin/preset block for independent control.
+
+        // Specify the GNSS radio
+#ifdef COMPILE_LG290P
+        gnss = (GNSS *)new GNSS_LG290P();
+#else  // COMPILE_LGP290P
+        gnss = (GNSS *)new GNSS_None();
+        systemPrintln("<<<<<<<<<< !!!!!!!!!! LG290P NOT COMPILED !!!!!!!!!! >>>>>>>>>>");
+#endif // COMPILE_LGP290P
+
+        present.psram_2mb = true;
+        present.gnss_lg290p = true;
+        present.needsExternalPpl = true;      // Uses the PointPerfect Library
+        present.gnss_to_uart = true;
+        present.gnssUpdatePort = "CH342 Channel B";
+
+        // The following are present on the optional shield. Devices will be marked offline if shield is not present.
+        present.charger_mcp73833 = true;
+        present.fuelgauge_max17048 = true;
+        present.display_i2c0 = true;
+        present.i2c0BusSpeed_400 = true; // Run display bus at higher speed
+        present.i2c1 = true;             // Qwiic bus
+        present.display_type = DISPLAY_128x64; // SH1106, not SSD1306 - see beginDisplay()
+        present.microSd = true;
+        present.gpioExpanderButtons = true;
+        present.microSdCardDetectGpioExpanderHigh = true; // CD is on GPIO 5 of expander. High = SD in place.
+
+        // We can't enable here because we don't know if lg290pFirmwareVersion is >= v1.5
+        // present.minElevation = true;
+        // present.minCN0 = true;
+
+        // GPIO26-37 are reserved for the octal flash/PSRAM on the N16R8 module and are
+        // NOT available here. GPIO0/3/45/46 are strapping pins and GPIO43/44 are the
+        // default UART0 (CH342 Channel A / USB-serial) pins, so those are avoided too.
+        // SPI pins below match the ESP32-S3 default FSPI pinout (SCK=12, MOSI=11, MISO=13, CS=10).
+        pin_I2C0_SDA = 8;
+        pin_I2C0_SCL = 9;
+
+        pin_I2C1_SDA = 17;
+        pin_I2C1_SCL = 18;
+
+        pin_GnssUart_RX = 4;
+        pin_GnssUart_TX = 5;
+
+        pin_GNSS_Reset = 6;
+        pin_GNSS_TimePulse = 7; // PPS on LG290P
+
+        pin_PICO = 11; // SPI PICO --> microSD card SDI
+        pin_POCI = 13; // SPI POCI --> microSD card SDO
+        pin_SCK = 12;
+        pin_microSD_CS = 10;
+
+        pin_gpioExpanderInterrupt = 14; // Pin 'AOI' (Analog Output Input) on Portability Shield
+
+        pin_bluetoothStatusLED = 2; // Blue LED
+        pin_gnssStatusLED = 1;      // Green LED
 
         // Turn on Bluetooth and GNSS LEDs to indicate power on
         pinMode(pin_bluetoothStatusLED, OUTPUT);
@@ -1095,7 +1179,7 @@ void forceGnssCommunicationRate(uint32_t &platformGnssCommunicationRate)
         // Override user setting. Required because beginGnssUart() is called before beginBoard().
         platformGnssCommunicationRate = 115200;
     }
-    else if (productVariant == RTK_POSTCARD || productVariant == RTK_TORCH_X2)
+    else if (productVariant == RTK_POSTCARD || productVariant == RTK_TORCH_X2 || productVariant == RTK_S3)
     {
         // LG290P communicates at 460800bps.
         platformGnssCommunicationRate = 115200 * 4;
@@ -1571,7 +1655,7 @@ void beginSystemState()
         // Return to either Base or Rover Not Started. The last state previous to power down.
         systemState = settings.lastState;
     }
-    else if (productVariant == RTK_POSTCARD)
+    else if (productVariant == RTK_POSTCARD || productVariant == RTK_S3)
     {
         // Return to either Rover or Base Not Started. The last state previous to power down.
         systemState = settings.lastState;

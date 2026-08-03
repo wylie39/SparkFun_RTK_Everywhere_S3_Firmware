@@ -4,15 +4,22 @@ bluetoothSelect.h
 
 #ifdef COMPILE_BT
 
+#include "sdkconfig.h" // Exposes CONFIG_IDF_TARGET_ESP32S3
+
+// ESP32-S3 has no Bluetooth Classic (BR/EDR) radio - only BLE. The local BluetoothSerial
+// copy below calls classic-only APIs (esp_spp_api.h, esp_gap_bt_api.h) that don't exist
+// in the S3 build's sdkconfig, so BTClassicSerial is compiled out entirely for S3 targets.
+#if !CONFIG_IDF_TARGET_ESP32S3
 // We use a local copy of the BluetoothSerial library so that we can increase the RX buffer. See issues:
 // https://github.com/sparkfun/SparkFun_RTK_Firmware/issues/23
 // https://github.com/sparkfun/SparkFun_RTK_Firmware/issues/469
 #include "src/BluetoothSerial/BluetoothSerial.h"
 
+#include "esp_sdp_api.h"
+#endif // !CONFIG_IDF_TARGET_ESP32S3
+
 #include <BleSerial.h> //Click here to get the library: http://librarymanager/All#ESP32_BleSerial by Avinab Malla
 #include <BleBufferedSerial.h>
-
-#include "esp_sdp_api.h"
 
 class BTSerialInterface : public virtual Stream
 {
@@ -34,14 +41,21 @@ class BTSerialInterface : public virtual Stream
     virtual size_t write(const uint8_t *buffer, size_t size) = 0;
     virtual size_t write(uint8_t value) = 0;
     virtual void flush() = 0;
+#if !CONFIG_IDF_TARGET_ESP32S3
+    // Apple MFi accessory mode (iAP2) requires Bluetooth Classic (SPP), which does not
+    // exist on ESP32-S3. These methods are only ever called from AuthCoPro.ino, which is
+    // itself compiled out for S3 (see COMPILE_AUTHENTICATION in RTK_Everywhere.ino).
     virtual bool connect(uint8_t remoteAddress[], int channel,
                          esp_spp_sec_t sec_mask = (ESP_SPP_SEC_ENCRYPT | ESP_SPP_SEC_AUTHENTICATE),
                          esp_spp_role_t role = ESP_SPP_ROLE_MASTER) = 0; // Needed for Apple Accessory
+#endif // !CONFIG_IDF_TARGET_ESP32S3
     virtual bool connected() = 0;
     virtual void enableSSP(bool inputCapability, bool outputCapability) = 0;
+#if !CONFIG_IDF_TARGET_ESP32S3
     virtual bool aclConnected() = 0;
     virtual uint8_t *aclGetAddress() = 0;
     virtual std::map<int, std::string> getChannels(const BTAddress &remoteAddress) = 0;
+#endif // !CONFIG_IDF_TARGET_ESP32S3
 
     virtual void onConfirmRequest(void (*cbPtr)(uint32_t)) = 0;
     virtual void confirmReply(bool confirm) = 0;
@@ -51,6 +65,7 @@ class BTSerialInterface : public virtual Stream
     virtual void memrelease(int mode) = 0;
 };
 
+#if !CONFIG_IDF_TARGET_ESP32S3
 class BTClassicSerial : public virtual BTSerialInterface, public BluetoothSerial
 {
     // Everything is already implemented in BluetoothSerial since the code was
@@ -174,6 +189,7 @@ class BTClassicSerial : public virtual BTSerialInterface, public BluetoothSerial
         BluetoothSerial::memrelease(mode);
     }
 };
+#endif // !CONFIG_IDF_TARGET_ESP32S3
 
 //class BTLESerial : public virtual BTSerialInterface, public BleSerial
 
@@ -255,10 +271,12 @@ class BTLESerial : public virtual BTSerialInterface, public BleBufferedSerial
         // BleSerial::flush();
     }
 
+#if !CONFIG_IDF_TARGET_ESP32S3
     bool connect(uint8_t remoteAddress[], int channel, esp_spp_sec_t sec_mask, esp_spp_role_t role)
     {
         return false;
     }
+#endif // !CONFIG_IDF_TARGET_ESP32S3
 
     bool connected()
     {
@@ -268,6 +286,7 @@ class BTLESerial : public virtual BTSerialInterface, public BleBufferedSerial
 
     void enableSSP(bool inputCapability, bool outputCapability) {}
 
+#if !CONFIG_IDF_TARGET_ESP32S3
     bool aclConnected()
     {
         return false;
@@ -283,6 +302,7 @@ class BTLESerial : public virtual BTSerialInterface, public BleBufferedSerial
         std::map<int, std::string> empty;
         return empty;
     }
+#endif // !CONFIG_IDF_TARGET_ESP32S3
 
     void onConfirmRequest(void (*cbPtr)(uint32_t)) {}
 
@@ -307,8 +327,10 @@ class BTLESerial : public virtual BTSerialInterface, public BleBufferedSerial
     //     // Server->startAdvertising(); //No longer used in v2 of BleSerial
     // }
 
+#if !CONFIG_IDF_TARGET_ESP32S3
   private:
     esp_spp_cb_t connectionCallback;
+#endif // !CONFIG_IDF_TARGET_ESP32S3
 };
 
 #endif // COMPILE_BT
