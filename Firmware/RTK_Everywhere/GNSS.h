@@ -21,7 +21,8 @@ typedef enum
 
 // Every virtual method below has a default (mostly no-op / neutral-value) body given
 // directly here, except for the handful that already have a real implementation in
-// GNSS.ino (comPortRefresh, isAntennaShorted, isAntennaOpen, supportsAntennaShortOpen).
+// GNSS.ino (comPortRefresh, hasGnssSpecificConfiguration, isAntennaShorted, isAntennaOpen,
+// menuGnssSpecificConfiguration, setGnssSpecificConfiguration, supportsAntennaShortOpen).
 // This matters beyond documentation: under the Itanium C++ ABI, GCC emits a class's
 // vtable only in the translation unit that defines the class's "key function" (its
 // first declared virtual method that is neither pure nor given an inline body). If any
@@ -261,7 +262,7 @@ class GNSS
     virtual uint32_t getTimeAccuracy() { return 0; }
 
     // Sets the four version number parts
-    virtual bool getVersion(uint16_t &major, uint8_t &minor, uint8_t &patch, uint8_t &revision);
+    virtual bool getVersion(uint16_t &major, uint8_t &minor, uint8_t &patch, uint8_t &revision) { return false; }
 
     // Returns full year, ie 2023, not 23.
     virtual uint16_t getYear() { return 0; }
@@ -334,7 +335,7 @@ class GNSS
     // Configure any settings specific to this GNSS
     virtual void menuGnssSpecificConfiguration();
 
-    virtual void menuMessageBaseRtcm();
+    virtual void menuMessageBaseRtcm() {}
 
     // Control the messages that get broadcast over Bluetooth and logged (if enabled)
     virtual void menuMessages() {}
@@ -391,7 +392,7 @@ class GNSS
     // Configure any additional settings specific to this GNSS
     virtual bool setGnssSpecificConfiguration();
 
-    virtual bool setPppService();
+    virtual bool setPppService() { return false; }
 
     // Configure any logging settings - currently mosaic-X5 specific
     virtual bool setLogging() { return false; }
