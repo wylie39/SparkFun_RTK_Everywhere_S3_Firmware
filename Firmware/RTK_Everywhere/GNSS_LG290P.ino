@@ -1100,6 +1100,22 @@ uint32_t GNSS_LG290P::getTimeAccuracy()
 }
 
 //----------------------------------------
+// Sets the pieces of the version number
+//----------------------------------------
+bool GNSS_LG290P::getVersion(uint16_t &major, uint8_t &minor, uint8_t &patch, uint8_t &revision)
+{
+    if (online.gnss)
+    {
+        bool response = _lg290p->getFirmwareVersionMajor((int &)major);
+        response &= _lg290p->getFirmwareVersionMinor((int &)minor);
+        patch = 0;
+        revision = 0;
+        return (response);
+    }
+    return false;
+}
+
+//----------------------------------------
 // Returns full year, ie 2023, not 23.
 //----------------------------------------
 uint16_t GNSS_LG290P::getYear()
@@ -1146,6 +1162,14 @@ bool GNSS_LG290P::gnssInRoverMode()
     if (getMode() == 1)
         return (true);
     return (false);
+}
+
+//----------------------------------------
+// Indicate if there are any additional settings specific to this GNSS
+//----------------------------------------
+bool GNSS_LG290P::hasGnssSpecificConfiguration()
+{
+    return true;
 }
 
 // If we issue a library command that must wait for a response, we don't want
@@ -1477,6 +1501,52 @@ void GNSS_LG290P::menuConstellations()
 }
 
 //----------------------------------------
+// Configure any settings specific to this GNSS
+//----------------------------------------
+void GNSS_LG290P::menuGnssSpecificConfiguration()
+{
+    while (1)
+    {
+        systemPrintln();
+        systemPrintln("Menu: GNSS-Specific Configuration");
+
+        systemPrintf("1) RTK Differential Age: %ds\r\n", settings.lg290pRtkDifferentialAge);
+        systemPrintf("2) RTK Differential Source Type: %s\r\n",
+            settings.lg290pRtkDifferentialSourceType == 0 ? "Auto" :
+            settings.lg290pRtkDifferentialSourceType == 1 ? "Normal" : "Wide Lane");
+
+        systemPrintln("x) Exit");
+
+        int incoming = getUserInputNumber(); // Returns EXIT, TIMEOUT, or long
+
+        if (incoming == 1)
+        {
+            uint16_t newAge = 120;
+            if (getNewSetting("Enter RTK Differential Age", 1, 600, &newAge) == INPUT_RESPONSE_VALID)
+            {
+                settings.lg290pRtkDifferentialAge = newAge;
+                gnssConfigure(GNSS_CONFIG_GNSS_SPECIFIC); // Request receiver to use new settings
+            }
+        }
+        else if (incoming == 2)
+        {
+            settings.lg290pRtkDifferentialSourceType += 1;
+            settings.lg290pRtkDifferentialSourceType %= 3;
+            gnssConfigure(GNSS_CONFIG_GNSS_SPECIFIC); // Request receiver to use new settings
+        }
+
+        else if (incoming == INPUT_RESPONSE_GETNUMBER_EXIT)
+            break;
+        else if (incoming == INPUT_RESPONSE_GETNUMBER_TIMEOUT)
+            break;
+        else
+            printUnknown(incoming);
+    }
+
+    clearBuffer(); // Empty buffer of any newline chars
+}
+
+//----------------------------------------
 void GNSS_LG290P::menuMessageBaseRtcm()
 {
     menuMessagesSubtype(settings.lg290pMessageRatesRTCMBase, "RTCMBase");
@@ -1720,7 +1790,7 @@ void GNSS_LG290P::menuMessagesSubtype(int *localMessageRate, const char *message
             // Message rates maxes are set within lgMessagesPQTM
             if (strcmp(messageType, "NMEA") == 0)
             {
-                if (getNewSetting(messageString, 0, lgMessagesPQTM[incoming].msgMaxRate, &newSetting) ==
+                if (getNewSetting(messageString, 0, lgMessagesNMEA[incoming].msgMaxRate, &newSetting) ==
                     INPUT_RESPONSE_VALID)
                 {
                     settings.lg290pMessageRatesNMEA[incoming] = newSetting;
@@ -1729,7 +1799,7 @@ void GNSS_LG290P::menuMessagesSubtype(int *localMessageRate, const char *message
             }
             if (strcmp(messageType, "RTCMRover") == 0)
             {
-                if (getNewSetting(messageString, 0, lgMessagesPQTM[incoming].msgMaxRate, &newSetting) ==
+                if (getNewSetting(messageString, 0, lgMessagesRTCM[incoming].msgMaxRate, &newSetting) ==
                     INPUT_RESPONSE_VALID)
                 {
                     settings.lg290pMessageRatesRTCMRover[incoming] = newSetting;
@@ -1738,7 +1808,7 @@ void GNSS_LG290P::menuMessagesSubtype(int *localMessageRate, const char *message
             }
             if (strcmp(messageType, "RTCMBase") == 0)
             {
-                if (getNewSetting(messageString, 0, lgMessagesPQTM[incoming].msgMaxRate, &newSetting) ==
+                if (getNewSetting(messageString, 0, lgMessagesRTCM[incoming].msgMaxRate, &newSetting) ==
                     INPUT_RESPONSE_VALID)
                 {
                     settings.lg290pMessageRatesRTCMBase[incoming] = newSetting;
@@ -2033,6 +2103,24 @@ bool GNSS_LG290P::setElevation(uint8_t elevationDegrees)
 }
 
 //----------------------------------------
+// Configure any additional settings specific to this GNSS
+//----------------------------------------
+bool GNSS_LG290P::setGnssSpecificConfiguration()
+{
+    bool response = true;
+
+    if (online.gnss)
+    {
+        response &= _lg290p->setRtkDifferentialAge(settings.lg290pRtkDifferentialAge);
+        response &= _lg290p->setRtkDifferentialSourceType(settings.lg290pRtkDifferentialSourceType);
+    }
+
+    gnssConfigure(GNSS_CONFIG_RESET); // Changes require device save/restart
+
+    return (response);
+}
+
+//----------------------------------------
 // Control whether HAS E6 is used in location fixes or not
 //----------------------------------------
 bool GNSS_LG290P::setPppService()
@@ -2078,10 +2166,8 @@ bool GNSS_LG290P::setPppService()
         // Check if a setting has changed
         bool settingsChanged = false;
 
-        if (settings.pppMode)
-
-            if (currentMode != settings.pppMode)
-                settingsChanged = true;
+        if (currentMode != settings.pppMode)
+            settingsChanged = true;
         if (currentDatum != settings.pppDatum)
             settingsChanged = true;
         if (currentTimeout != settings.pppTimeout)
@@ -2333,14 +2419,36 @@ bool GNSS_LG290P::setMessagesOther()
 bool GNSS_LG290P::setMessagesRTCMBase()
 {
     bool response = true;
-    bool enableRTCM = false; // Goes true if we need to enable RTCM output reporting
+    bool enableRTCM = false;      // Goes true if we need to enable RTCM output reporting
+    bool enableEphemeris = false; // Goes true if we need to enable ephemeris output
 
     int portNumber = 1;
+
+    int minimumEphemeris = 7200; // Start at 7200. Reduce to minimum non-zero eph rate
 
     while (portNumber < 4)
     {
         for (int messageNumber = 0; messageNumber < MAX_LG290P_RTCM_MSG; messageNumber++)
         {
+            // 1005, 1006, 1033, 107x to 113x can be set to 1-1200 fixes between reports
+            // 1019 to 1046, 1230 can only be set to 1 fix per report
+            // So we set all non-zero ephemeris to 1, and set PQTMCFGRTCM to the lowest value found
+
+            // For ephemeris messages, capture the message with the lowest non-zero rate
+            if (lgMessagesRTCM[messageNumber].msgIsEphemeris)
+                if (settings.lg290pMessageRatesRTCMBase[messageNumber] > 0 &&
+                    settings.lg290pMessageRatesRTCMBase[messageNumber] < minimumEphemeris)
+                    {
+                        minimumEphemeris = settings.lg290pMessageRatesRTCMBase[messageNumber];
+                        enableEphemeris = true;
+                    }
+
+            // Force all ephemeris messages to 1 or 0. See above for reasoning.
+            int rate = settings.lg290pMessageRatesRTCMBase[messageNumber];
+            if (lgMessagesRTCM[messageNumber].msgIsEphemeris)
+                if (rate > 1)
+                    rate = 1;
+
             // Check if this RTCM message is supported by the current LG290P firmware
             if (lg290pFirmwareVersionInt >= lgMessagesRTCM[messageNumber].firmwareVersionSupported)
             {
@@ -2348,13 +2456,12 @@ bool GNSS_LG290P::setMessagesRTCMBase()
                 if (lg290pFirmwareVersionInt >= 104)
                     // Enable this message, at this rate, on this port
                     response &= _lg290p->setMessageRateOnPort(
-                        lgMessagesRTCM[messageNumber].msgTextName, settings.lg290pMessageRatesRTCMBase[messageNumber],
+                        lgMessagesRTCM[messageNumber].msgTextName, rate,
                         portNumber, lgMessagesRTCM[messageNumber].msgVersionOffset);
                 else
                     // Enable this message, at this rate
                     response &= _lg290p->setMessageRate(lgMessagesRTCM[messageNumber].msgTextName,
-                                                        settings.lg290pMessageRatesRTCMBase[messageNumber],
-                                                        lgMessagesRTCM[messageNumber].msgVersionOffset);
+                                                        rate, lgMessagesRTCM[messageNumber].msgVersionOffset);
 
                 if (response == false && settings.debugGnss)
                     systemPrintf("Enable RTCM failed at messageNumber %d %s\r\n", messageNumber,
@@ -2376,11 +2483,17 @@ bool GNSS_LG290P::setMessagesRTCMBase()
     if (enableRTCM == true)
     {
         if (settings.debugGnss)
-            systemPrintln("Enabling Base RTCM output");
+        {
+            if (enableEphemeris)
+                systemPrintf("Enabling Base RTCM MSM output with ephemeris rate of %d\r\n", minimumEphemeris);
+            else
+                systemPrintln("Enabling Base RTCM MSM output");
+        }
 
         // PQTMCFGRTCM fails to respond with OK over UART2 of LG290P, so don't look for it
         char cfgRtcm[40];
-        snprintf(cfgRtcm, sizeof(cfgRtcm), "PQTMCFGRTCM,W,%c,0,-90,07,06,2,1", settings.useMSM7 ? '7' : '4');
+        snprintf(cfgRtcm, sizeof(cfgRtcm), "PQTMCFGRTCM,W,%c,0,-90,07,06,%d,%d", settings.useMSM7 ? '7' : '4',
+                 enableEphemeris ? 2 : 0, enableEphemeris ? minimumEphemeris : 0);
         _lg290p->sendOkCommand(cfgRtcm); // Enable MSM4/7, output regular intervals, interval (seconds)
     }
 
@@ -2399,29 +2512,35 @@ bool GNSS_LG290P::setMessagesRTCMRover()
     bool rtcm1020Enabled = false;
     bool rtcm1042Enabled = false;
     bool rtcm1046Enabled = false;
-    bool enableRTCM = false; // Goes true if we need to enable RTCM output reporting
+    bool enableRTCM = false;      // Goes true if we need to enable RTCM output reporting
+    bool enableEphemeris = false; // Goes true if we need to enable ephemeris output
 
     int portNumber = 1;
 
-    int minimumRtcmRate = 1000;
+    int minimumEphemeris = 7200; // Start at 7200. Reduce to minimum non-zero eph rate
 
     while (portNumber < 4)
     {
         for (int messageNumber = 0; messageNumber < MAX_LG290P_RTCM_MSG; messageNumber++)
         {
-            // 1019 to 1046 can only be set to 1 fix per report
-            // 107x to 112x can be set to 1-1200 fixes between reports
-            // So we set all RTCM to 1, and set PQTMCFGRTCM to the lowest value found
+            // 1005, 1006, 1033, 107x to 113x can be set to 1-1200 fixes between reports
+            // 1019 to 1046, 1230 can only be set to 1 fix per report
+            // So we set all non-zero ephemeris to 1, and set PQTMCFGRTCM to the lowest value found
 
-            // Capture the message with the lowest rate
-            if (settings.lg290pMessageRatesRTCMRover[messageNumber] > 0 &&
-                settings.lg290pMessageRatesRTCMRover[messageNumber] < minimumRtcmRate)
-                minimumRtcmRate = settings.lg290pMessageRatesRTCMRover[messageNumber];
+            // For ephemeris messages, capture the message with the lowest non-zero rate
+            if (lgMessagesRTCM[messageNumber].msgIsEphemeris)
+                if (settings.lg290pMessageRatesRTCMRover[messageNumber] > 0 &&
+                    settings.lg290pMessageRatesRTCMRover[messageNumber] < minimumEphemeris)
+                    {
+                        minimumEphemeris = settings.lg290pMessageRatesRTCMRover[messageNumber];
+                        enableEphemeris = true;
+                    }
 
-            // Force all RTCM messages to 1 or 0. See above for reasoning.
+            // Force all ephemeris messages to 1 or 0. See above for reasoning.
             int rate = settings.lg290pMessageRatesRTCMRover[messageNumber];
-            if (rate > 1)
-                rate = 1;
+            if (lgMessagesRTCM[messageNumber].msgIsEphemeris)
+                if (rate > 1)
+                    rate = 1;
 
             // Check if this RTCM message is supported by the current LG290P firmware
             if (lg290pFirmwareVersionInt >= lgMessagesRTCM[messageNumber].firmwareVersionSupported)
@@ -2476,8 +2595,10 @@ bool GNSS_LG290P::setMessagesRTCMRover()
     if (pointPerfectServiceUsesKeys())
     {
         enableRTCM = true; // Force enable RTCM output
+        enableEphemeris = true;
 
         // Force on any messages that are needed for PPL
+        // Note: a rate/interval of 1 is probably a bit agressive. A lower rate may be better?
         if (rtcm1019Enabled == false)
         {
             if (settings.debugCorrections)
@@ -2509,16 +2630,21 @@ bool GNSS_LG290P::setMessagesRTCMRover()
     // If any RTCM message is enabled, send CFGRTCM
     if (enableRTCM == true)
     {
-        if (settings.debugCorrections)
-            systemPrintf("Enabling Rover RTCM MSM output with rate of %d\r\n", minimumRtcmRate);
+        if (settings.debugGnss || settings.debugGnssConfig)
+        {
+            if (enableEphemeris)
+                systemPrintf("Enabling Rover RTCM MSM output with ephemeris rate of %d\r\n", minimumEphemeris);
+            else
+                systemPrintln("Enabling Rover RTCM MSM output");
+        }
 
         // Enable MSM4/7 (for faster PPP CSRS results), output at a rate equal to the minimum RTCM rate (EPH Mode =
         // 2) PQTMCFGRTCM, W, <MSM_Type>, <MSM_Mode>, <MSM_ElevThd>, <Reserved>, <Reserved>, <EPH_Mode>,
         // <EPH_Interval> Set MSM_ElevThd to 15 degrees from rftop suggestion
 
         char msmCommand[40] = {0};
-        snprintf(msmCommand, sizeof(msmCommand), "PQTMCFGRTCM,W,%c,0,15,07,06,2,%d", settings.useMSM7 ? '7' : '4',
-                 minimumRtcmRate);
+        snprintf(msmCommand, sizeof(msmCommand), "PQTMCFGRTCM,W,%c,0,15,07,06,%d,%d", settings.useMSM7 ? '7' : '4',
+                 enableEphemeris ? 2 : 0, enableEphemeris ? minimumEphemeris : 0);
 
         // PQTMCFGRTCM fails to respond with OK over UART2 of LG290P, so don't look for it
         _lg290p->sendOkCommand(msmCommand);
@@ -3279,7 +3405,10 @@ bool lg290pNewSettingValue(struct Settings * tempSettings, RTK_Settings_Types ty
 //----------------------------------------
 // Called by gnssSettingsToFile to save LG290P specific settings
 //----------------------------------------
-bool lg290pSettingsToFile(File *settingsFile, RTK_Settings_Types type, int settingsIndex)
+bool lg290pSettingsToFile(char * line,
+                          size_t lineSize,
+                          RTK_Settings_Types type,
+                          int settingsIndex)
 {
     switch (type)
     {
@@ -3290,10 +3419,10 @@ bool lg290pSettingsToFile(File *settingsFile, RTK_Settings_Types type, int setti
         // Record LG290P NMEA rates
         for (int x = 0; x < rtkSettingsEntries[settingsIndex].qualifier; x++)
         {
-            char tempString[50]; // lg290pMessageRatesNMEA_GPGGA=2
-            snprintf(tempString, sizeof(tempString), "%s%s=%d", rtkSettingsEntries[settingsIndex].name,
+            // lg290pMessageRatesNMEA_GPGGA=2
+            snprintf(line, lineSize, "%s%s=%d\r\n", rtkSettingsEntries[settingsIndex].name,
                      lgMessagesNMEA[x].msgTextName, settings.lg290pMessageRatesNMEA[x]);
-            settingsFile->println(tempString);
+            nvmRecordStringToFile(line);
         }
     }
     break;
@@ -3301,10 +3430,10 @@ bool lg290pSettingsToFile(File *settingsFile, RTK_Settings_Types type, int setti
         // Record LG290P Rover RTCM rates
         for (int x = 0; x < rtkSettingsEntries[settingsIndex].qualifier; x++)
         {
-            char tempString[50]; // lg290pMessageRatesRTCMRover_RTCM1005=2
-            snprintf(tempString, sizeof(tempString), "%s%s=%d", rtkSettingsEntries[settingsIndex].name,
+            // lg290pMessageRatesRTCMRover_RTCM1005=2
+            snprintf(line, lineSize, "%s%s=%d\r\n", rtkSettingsEntries[settingsIndex].name,
                      lgMessagesRTCM[x].msgTextName, settings.lg290pMessageRatesRTCMRover[x]);
-            settingsFile->println(tempString);
+            nvmRecordStringToFile(line);
         }
     }
     break;
@@ -3312,10 +3441,10 @@ bool lg290pSettingsToFile(File *settingsFile, RTK_Settings_Types type, int setti
         // Record LG290P Base RTCM rates
         for (int x = 0; x < rtkSettingsEntries[settingsIndex].qualifier; x++)
         {
-            char tempString[50]; // lg290pMessageRatesRTCMBase_RTCM1005=2
-            snprintf(tempString, sizeof(tempString), "%s%s=%d", rtkSettingsEntries[settingsIndex].name,
+            // lg290pMessageRatesRTCMBase_RTCM1005=2
+            snprintf(line, lineSize, "%s%s=%d\r\n", rtkSettingsEntries[settingsIndex].name,
                      lgMessagesRTCM[x].msgTextName, settings.lg290pMessageRatesRTCMBase[x]);
-            settingsFile->println(tempString);
+            nvmRecordStringToFile(line);
         }
     }
     break;
@@ -3323,10 +3452,10 @@ bool lg290pSettingsToFile(File *settingsFile, RTK_Settings_Types type, int setti
         // Record LG290P PQTM rates
         for (int x = 0; x < rtkSettingsEntries[settingsIndex].qualifier; x++)
         {
-            char tempString[50]; // lg290pMessageRatesPQTM_EPE=1
-            snprintf(tempString, sizeof(tempString), "%s%s=%d", rtkSettingsEntries[settingsIndex].name,
+            // lg290pMessageRatesPQTM_EPE=1
+            snprintf(line, lineSize, "%s%s=%d\r\n", rtkSettingsEntries[settingsIndex].name,
                      lgMessagesPQTM[x].msgTextName, settings.lg290pMessageRatesPQTM[x]);
-            settingsFile->println(tempString);
+            nvmRecordStringToFile(line);
         }
     }
     break;
@@ -3334,10 +3463,10 @@ bool lg290pSettingsToFile(File *settingsFile, RTK_Settings_Types type, int setti
         // Record LG290P Constellations
         for (int x = 0; x < rtkSettingsEntries[settingsIndex].qualifier; x++)
         {
-            char tempString[50]; // lg290pConstellations_GLONASS=1
-            snprintf(tempString, sizeof(tempString), "%s%s=%d", rtkSettingsEntries[settingsIndex].name,
+            // lg290pConstellations_GLONASS=1
+            snprintf(line, lineSize, "%s%s=%d\r\n", rtkSettingsEntries[settingsIndex].name,
                      lg290pConstellationNames[x], settings.lg290pConstellations[x]);
-            settingsFile->println(tempString);
+            nvmRecordStringToFile(line);
         }
     }
     break;

@@ -14,15 +14,7 @@ void changeProfileNumber(byte newProfileNumber, bool recordSettings)
     setSettingsFileName(); // Load the settings file name into memory (enabled profile name delete)
 
     // We need to load these settings from file so that we can record a profile name change correctly
-    bool responseLFS = loadSystemSettingsFromFileLFS(settingsFileName);
-    bool responseSD = loadSystemSettingsFromFileSD(settingsFileName);
-
-    // If this is an empty/new profile slot, overwrite our current settings with defaults
-    if (responseLFS == false && responseSD == false)
-    {
-        systemPrintln("No profile found: Applying default settings");
-        settingsToDefaults();
-    }
+    loadSettingsUsingTempSetting(true);
 }
 
 // Check various setting arrays (message rates, etc) to see if they need to be reset to defaults
@@ -380,6 +372,9 @@ void factoryReset(bool alreadyHasSemaphore)
     }
     else
         systemPrintln("GNSS not online: Unable to factory reset.");
+
+    if(webServerIsConnected())
+        webServerSendString("confirmFactoryReset,1,");
 
     systemPrintln("Settings erased successfully. Rebooting. Goodbye!");
     delay(2000);
@@ -863,21 +858,9 @@ bool removeFile(const char *fileName)
     bool removed = true;
 
     removed &= removeFileSD(fileName);
-    removed &= removeFileLFS(fileName);
+    removed &= removeFileLfs(fileName);
 
     return (removed);
-}
-
-bool removeFileLFS(const char *fileName)
-{
-    if (LittleFS.exists(fileName))
-    {
-        LittleFS.remove(fileName);
-        log_d("Removing LittleFS: %s", fileName);
-        return (true);
-    }
-
-    return (false);
 }
 
 // Remove a given filename from SD

@@ -714,6 +714,7 @@ enum
     NETCONSUMER_TCP_SERVER,
     NETCONSUMER_UDP_SERVER,
     NETCONSUMER_WEB_CONFIG,
+    NETCONSUMER_DEVICE_OTA,
     // Add new consumers just before this line
     // Also add them to the networkConsumerTable
     NETCONSUMER_MAX
@@ -721,6 +722,13 @@ enum
 
 typedef uint8_t NETCONSUMER_t;
 typedef uint16_t NETCONSUMER_MASK_t;
+
+enum Im19UpdateResult
+{
+    IM19_UPDATE_FAILED = 0,
+    IM19_UPDATE_SUCCESS,
+    IM19_UPDATE_RETRY, // lost frames (or no response) - caller should re-stream the source and call again
+};
 
 enum PP_NickName
 {
@@ -739,6 +747,9 @@ struct Settings
 {
     int sizeOfSettings = 0;             // sizeOfSettings **must** be the first entry and must be int
     int rtkIdentifier = RTK_IDENTIFIER; // rtkIdentifier **must** be the second entry
+
+    // CRC control, old files missing this value use false, new file write true
+    bool settingsFileHasCrc = false;    // settingsFileHasCrc **must** be the third entry
 
     //Once we detect the platform or receiver, no need to re-detect
     //ProductVariant previouslyDetectedPlatform = RTK_UNKNOWN; //Because LFS is started after deviceID, this is mute
@@ -1186,6 +1197,8 @@ struct Settings
         254}; // Mark first record with key so defaults will be applied. Int value for each supported message - Report
               // rates for RTCM Base. Default to Quectel recommended rates.
     int lg290pMessageRatesPQTM[MAX_LG290P_PQTM_MSG] = {254}; // Mark first record with key so defaults will be applied.
+    uint16_t lg290pRtkDifferentialAge = 120; // LG290P only. Sets the max differential age of RTK fix. 1-600s. Default: 120s
+    uint16_t lg290pRtkDifferentialSourceType = 0; // LG290P only. 0 = Auto, 1 = Normal, 2 = Wide Lane. Default is Auto.
 #endif // COMPILE_LG290P
 
     bool debugSettings = false;
@@ -1227,7 +1240,8 @@ typedef enum
     ALL = (1 << 5) - 1, // ALL - must be the highest single variant
     ZED = ZF9 | ZX2,    // Hybrids are possible (enums don't have to be consecutive)
     MSM = L29,          // Platforms which require parameter selection of MSM7 over MSM4
-    HAS = L29,          // Platforms which support Galileo HAS
+    HAS = L29 | ZX2,    // Platforms which support Galileo HAS - includes ZED-X20P with HPG >= 2.10
+    // Note: when adding new variants or hybrids, update settingAvailableOnPlatform in menuComands.ino to match
 } Facet_FP_Variant;
 
 typedef bool (* AFTER_CMD)(const char *settingName, void *settingData, int settingType);
@@ -1500,12 +1514,12 @@ const RTK_Settings_Entry rtkSettingsEntries[] =
     // Mosaic
 #ifdef  COMPILE_MOSAICX5
     { 1, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicConst,  MAX_MOSAIC_CONSTELLATIONS, & settings.mosaicConstellations, "constellation_", gnssCmdUpdateConstellations, },
-    { 1, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMSNmea, MAX_MOSAIC_NMEA_MSG, & settings.mosaicMessageStreamNMEA, "messageStreamNMEA_", gnssCmdUpdateMessageRates, },
-    { 1, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicSINmea, MOSAIC_NUM_NMEA_STREAMS, & settings.mosaicStreamIntervalsNMEA, "streamIntervalNMEA_", gnssCmdUpdateMessageRates, },
-    { 1, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMIRvRT, MAX_MOSAIC_RTCM_V3_INTERVAL_GROUPS, & settings.mosaicMessageIntervalsRTCMv3Rover, "messageIntervalRTCMRover_", gnssCmdUpdateMessageRates, },
-    { 1, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMIBaRT, MAX_MOSAIC_RTCM_V3_INTERVAL_GROUPS, & settings.mosaicMessageIntervalsRTCMv3Base, "messageIntervalRTCMBase_", gnssCmdUpdateMessageRates, },
-    { 1, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMERvRT, MAX_MOSAIC_RTCM_V3_MSG, & settings.mosaicMessageEnabledRTCMv3Rover, "messageEnabledRTCMRover_", gnssCmdUpdateMessageRates, },
-    { 1, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMEBaRT, MAX_MOSAIC_RTCM_V3_MSG, & settings.mosaicMessageEnabledRTCMv3Base, "messageEnabledRTCMBase_", gnssCmdUpdateMessageRates, },
+    { 0, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMSNmea, MAX_MOSAIC_NMEA_MSG, & settings.mosaicMessageStreamNMEA, "messageStreamNMEA_", gnssCmdUpdateMessageRates, },
+    { 0, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicSINmea, MOSAIC_NUM_NMEA_STREAMS, & settings.mosaicStreamIntervalsNMEA, "streamIntervalNMEA_", gnssCmdUpdateMessageRates, },
+    { 0, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMIRvRT, MAX_MOSAIC_RTCM_V3_INTERVAL_GROUPS, & settings.mosaicMessageIntervalsRTCMv3Rover, "messageIntervalRTCMRover_", gnssCmdUpdateMessageRates, },
+    { 0, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMIBaRT, MAX_MOSAIC_RTCM_V3_INTERVAL_GROUPS, & settings.mosaicMessageIntervalsRTCMv3Base, "messageIntervalRTCMBase_", gnssCmdUpdateMessageRates, },
+    { 0, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMERvRT, MAX_MOSAIC_RTCM_V3_MSG, & settings.mosaicMessageEnabledRTCMv3Rover, "messageEnabledRTCMRover_", gnssCmdUpdateMessageRates, },
+    { 0, 1, 1, 0, 1, 0, 0, MX5, 0, tMosaicMEBaRT, MAX_MOSAIC_RTCM_V3_MSG, & settings.mosaicMessageEnabledRTCMv3Base, "messageEnabledRTCMBase_", gnssCmdUpdateMessageRates, },
     { 1, 1, 0, 0, 1, 0, 0, MX5, 0, _bool,     0, & settings.enableLoggingRINEX, "enableLoggingRINEX", nullptr, },
     { 1, 1, 0, 0, 1, 0, 0, MX5, 0, _uint8_t,  0, & settings.RINEXFileDuration, "RINEXFileDuration", nullptr, },
     { 1, 1, 0, 0, 1, 0, 0, MX5, 0, _uint8_t,  0, & settings.RINEXObsInterval, "RINEXObsInterval", nullptr, },
@@ -1777,7 +1791,7 @@ const RTK_Settings_Entry rtkSettingsEntries[] =
 //    f  n  f  E  a  r  a
 //    i  d  i  v  i  c  r  F    X
 //    g  s  x  k  c  h  d  P    2  Type       Qual                Variable                  Name              afterSetCmd
-    { 1, 1, 0, 0, 0, 1, 0, ALL, 0, _bool,     3, & settings.enableMultipathMitigation, "enableMultipathMitigation", nullptr, },
+    { 1, 1, 0, 0, 0, 1, 0, NON, 0, _bool,     3, & settings.enableMultipathMitigation, "enableMultipathMitigation", nullptr, },
     { 0, 0, 0, 0, 0, 1, 0, ALL, 0, _bool,     0, & settings.enableImuCompensationDebug, "enableImuCompensationDebug", nullptr, },
     { 0, 0, 0, 0, 0, 1, 0, ALL, 0, _bool,     0, & settings.enableImuDebug, "enableImuDebug", nullptr, },
     { 1, 1, 0, 0, 0, 1, 0, ALL, 0, _bool,     0, & settings.enableTiltCompensation, "enableTiltCompensation", nullptr, },
@@ -1837,6 +1851,8 @@ const RTK_Settings_Entry rtkSettingsEntries[] =
     { 0, 1, 1, 0, 0, 0, 1, L29, 1, tLgMRBaRT, MAX_LG290P_RTCM_MSG, & settings.lg290pMessageRatesRTCMBase, "messageRateRTCMBase_", gnssCmdUpdateMessageRates, },
     { 0, 1, 1, 0, 0, 0, 1, L29, 1, tLgMRRvRT, MAX_LG290P_RTCM_MSG, & settings.lg290pMessageRatesRTCMRover, "messageRateRTCMRover_", gnssCmdUpdateMessageRates, },
     { 0, 1, 1, 0, 0, 0, 1, L29, 1, tLgMRPqtm, MAX_LG290P_PQTM_MSG, & settings.lg290pMessageRatesPQTM, "messageRatePQTM_", gnssCmdUpdateMessageRates, },
+    { 1, 1, 0, 0, 0, 0, 1, L29, 1, _uint16_t, 0, & settings.lg290pRtkDifferentialAge, "lg290pRtkDifferentialAge", nullptr, },
+    { 1, 1, 0, 0, 0, 0, 1, L29, 1, _uint16_t, 0, & settings.lg290pRtkDifferentialSourceType, "lg290pRtkDifferentialSourceType", nullptr, },
 #endif  // COMPILE_LG290P
 
     { 0, 0, 0, 1, 1, 1, 1, ALL, 1, _bool,     0, & settings.debugSettings, "debugSettings", nullptr, },
@@ -1966,7 +1982,6 @@ struct struct_online
     bool lband_gnss = false;
     bool pointPerfectKeysApplied = false;
     bool logging = false;
-    bool loraRadio = false;
     bool microSD = false;
     bool mqttClient = false;
     bool ntripClient = false;
@@ -1974,6 +1989,7 @@ struct struct_online
     bool otaClient = false;
     bool ppl = false;
     bool psram = false;
+    bool radio_lora = false;
     bool rtc = false;
     bool serialOutput = false;
     bool tcpClient = false;
@@ -1981,6 +1997,7 @@ struct struct_online
     bool udpServer = false;
     bool webServer = false;
     bool authenticationCoPro = false; // MFi authentication
+    bool imu_im19 = false;
 } online;
 
 typedef uint8_t NetIndex_t;     // Index into the networkInterfaceTable
@@ -2000,6 +2017,9 @@ enum NetworkTypes
     // Add new networks above this line in default priority order
     NETWORK_ANY,            // 3
     NETWORK_MAX = NETWORK_ANY,
+
+    // Reserved: Only used to manage mDNS
+    NETWORK_WIFI_AP         // 4
 };
 
 #ifdef  COMPILE_NETWORK
@@ -2132,6 +2152,42 @@ o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU
 rqXRfboQnoZsG4q5WTP468SQvvG5
 -----END CERTIFICATE-----
 )=====";
+
+// ISRG Root X1 (Let's Encrypt). Used to validate raw.githubusercontent.com's server cert chain.
+static const char GITHUB_RAW_PUBLIC_CERT[] PROGMEM = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----
+)EOF";
+
 #endif  // COMPILE_NETWORK
 
 //****************************************
@@ -2150,7 +2206,6 @@ class RTK_WIFI
 {
   private:
 
-    WIFI_CHANNEL_t _apChannel;  // Channel required for soft AP, zero (0) use wifiChannel
     int16_t _apCount;           // The number or remote APs detected in the WiFi network
     IPAddress _apDnsAddress;    // DNS IP address to use while translating names into IP addresses
     IPAddress _apFirstDhcpAddress;  // First IP address to use for DHCP
@@ -2158,7 +2213,6 @@ class RTK_WIFI
     IPAddress _apIpAddress;     // IP address of the soft AP
     uint8_t _apMacAddress[6];   // MAC address of the soft AP
     IPAddress _apSubnetMask;    // Subnet mask for soft AP
-    WIFI_CHANNEL_t _espNowChannel;  // Channel required for ESPNow, zero (0) use wifiChannel
     volatile bool _scanRunning; // Scan running
     int _staAuthType;           // Authorization type for the remote AP
     bool _staConnected;         // True when station is connected
@@ -2169,7 +2223,6 @@ class RTK_WIFI
     const char * _staRemoteApSsid;      // SSID of remote AP
     const char * _staRemoteApPassword;  // Password of remote AP
     volatile WIFI_ACTION_t _started;    // Components that are started and running
-    WIFI_CHANNEL_t _stationChannel; // Channel required for station, zero (0) use wifiChannel
     bool _usingDefaultChannel;  // Using default WiFi channel
     bool _verbose;              // True causes more debug output to be displayed
 
@@ -2339,16 +2392,6 @@ class RTK_WIFI
                 const char * fileName,
                 int lineNumber);
 
-    // Get the ESP-NOW channel
-    // Outputs:
-    //   Returns the requested ESP-NOW channel
-    WIFI_CHANNEL_t espNowChannelGet();
-
-    // Set the ESP-NOW channel
-    // Inputs:
-    //   channel: New ESP-NOW channel number
-    void espNowChannelSet(WIFI_CHANNEL_t channel);
-
     // Get the ESP-NOW status
     // Outputs:
     //   Returns true when ESP-NOW is online and ready for use
@@ -2366,16 +2409,6 @@ class RTK_WIFI
     // Outputs:
     //   Returns the current WiFi channel number
     WIFI_CHANNEL_t getChannel();
-
-    // Get the soft AP channel
-    // Outputs:
-    //   Returns the requested soft AP channel
-    WIFI_CHANNEL_t softApChannelGet();
-
-    // Set the soft AP channel
-    // Inputs:
-    //   channel: Request the channel for WiFi soft AP
-    void softApChannelSet(WIFI_CHANNEL_t channel);
 
     // Configure the soft AP
     // Inputs:
@@ -2414,16 +2447,6 @@ class RTK_WIFI
     //    Returns true if the soft AP was started successfully and false
     //    otherwise
     bool startAp(bool forceAP);
-
-    // Get the station channel
-    // Outputs:
-    //   Returns the requested station channel
-    WIFI_CHANNEL_t stationChannelGet();
-
-    // Set the station channel
-    // Inputs:
-    //   channel: Request the channel for WiFi station
-    void stationChannelSet(WIFI_CHANNEL_t channel);
 
     // Get the WiFi station IP address
     // Returns the IP address of the WiFi station

@@ -25,72 +25,73 @@ typedef struct
     const char msgTextName[strlen("PQTMGEOFENCESTATUS") + 1]; // Printable/Human readable name
     const int
         msgVersionOffset; // 'MsgVer' or 'Offset' for a given message. Varies depending on the message. -1 of omitted.
-    const int msgDefaultRate;             // Default rate for 'factory' settings
-    const int msgMaxRate;                   // Maximum allowed N message rate
+    const int msgDefaultRate;           // Default rate for 'factory' settings
+    const int msgMaxRate;               // Maximum allowed N message rate
+    const bool msgIsEphemeris;          // True indicates message contains Ephemeris, set by PQTMCFGRTCM
     const int firmwareVersionSupported; // The minimum version this message is supported.
-                                            // 0 = all versions.
-                                            // 104 = Supported in v1.4 and later
+                                        // 0 = all versions.
+                                        // 104 = Supported in v1.4 and later
 } lg290pMsg;
 
 // Static array containing all the compatible messages
 // Rate = Output once every N position fix(es).
 const lg290pMsg lgMessagesNMEA[] = {
     // In order from the LG29xP Series GNSS Protocol Spec v1.2.0 20260109, Table 6
-    {"RMC", -1, 1, 255, 0},   // Firmware v1.0 to v1.6, N = 1. v2.1, N = 0-255
-    {"GGA", -1, 1, 255, 0},   // No message version for NMEA
-    {"GSV", -1, 1, 255, 0},   //
-    {"GSA", -1, 1, 255, 0},   //
-    {"VTG", -1, 1, 255, 0},   //
-    {"GLL", -1, 1, 255, 0},   //
-    {"GBS", -1, 0, 255, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
-    {"GNS", -1, 0, 255, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
-    {"GST", -1, 1, 255, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
-    {"ZDA", -1, 0, 255, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
-    {"HDT", -1, 0, 255, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
-    {"THS", -1, 0, 255, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
+    {"RMC", -1, 1, 255, false, 0},   // Firmware v1.0 to v1.6, N = 1. v2.1, N = 0-255
+    {"GGA", -1, 1, 255, false, 0},   // No message version for NMEA
+    {"GSV", -1, 1, 255, false, 0},   //
+    {"GSA", -1, 1, 255, false, 0},   //
+    {"VTG", -1, 1, 255, false, 0},   //
+    {"GLL", -1, 1, 255, false, 0},   //
+    {"GBS", -1, 0, 255, false, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
+    {"GNS", -1, 0, 255, false, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
+    {"GST", -1, 1, 255, false, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
+    {"ZDA", -1, 0, 255, false, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
+    {"HDT", -1, 0, 255, false, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
+    {"THS", -1, 0, 255, false, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
 };
 
 const lg290pMsg lgMessagesRTCM[] = {
     // In order from the LG29xP Series GNSS Protocol Spec v1.2.0 20260109, Table 6
-    {"RTCM3-1005", -1, 1, 1200, 0},   // RTCM-### must have only the rate (no msgVer/Offset)
-    {"RTCM3-1006", -1, 0, 1200, 0},   //
-    {"RTCM3-1033", -1, 0, 1200, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
-    {"RTCM3-107X", 0, 1, 1200, 0},    // RTCM3-###X Must have rate and msgVer/Offset = 0.
-    {"RTCM3-108X", 0, 1, 1200, 0},    //
-    {"RTCM3-109X", 0, 1, 1200, 0},    //
-    {"RTCM3-111X", 0, 1, 1200, 0},    //
-    {"RTCM3-112X", 0, 1, 1200, 0},    //
-    {"RTCM3-113X", 0, 1, 1200, 0},    //
-    {"RTCM3-1019", -1, 0, 1, 0},      //
-    {"RTCM3-1020", -1, 0, 1, 0},      //
-    {"RTCM3-1041", -1, 0, 1, 0},      //
-    {"RTCM3-1042", -1, 0, 1, 0},      //
-    {"RTCM3-1044", -1, 0, 1, 0},      //
-    {"RTCM3-1046", -1, 0, 1, 0},      //
-    {"RTCM3-1230", -1, 0, 1, 201},    // Added in v1.2.0 spec. Firmware v2.1 and above.
+    {"RTCM3-1005", -1, 1, 1200, false, 0},   // RTCM-### must have only the rate (no msgVer/Offset)
+    {"RTCM3-1006", -1, 0, 1200, false, 0},   //
+    {"RTCM3-1033", -1, 0, 1200, false, 104}, // Added in v1.1.0 spec. Firmware v1.4 and above
+    {"RTCM3-107X", 0, 1, 1200, false, 0},    // RTCM3-###X Must have rate and msgVer/Offset = 0.
+    {"RTCM3-108X", 0, 1, 1200, false, 0},    //
+    {"RTCM3-109X", 0, 1, 1200, false, 0},    //
+    {"RTCM3-111X", 0, 1, 1200, false, 0},    //
+    {"RTCM3-112X", 0, 1, 1200, false, 0},    //
+    {"RTCM3-113X", 0, 1, 1200, false, 0},    //
+    {"RTCM3-1019", -1, 0, 7200, true, 0},      // Ephemeris: CFGMSGRATE must be 0 or 1; CFGRTCM sets the interval 0-7200
+    {"RTCM3-1020", -1, 0, 7200, true, 0},      //
+    {"RTCM3-1041", -1, 0, 7200, true, 0},      //
+    {"RTCM3-1042", -1, 0, 7200, true, 0},      //
+    {"RTCM3-1044", -1, 0, 7200, true, 0},      //
+    {"RTCM3-1046", -1, 0, 7200, true, 0},      //
+    {"RTCM3-1230", -1, 0, 7200, true, 201},    // Added in v1.2.0 spec. Firmware v2.1 and above.
 };
 
 // Quectel Proprietary messages
 // Any message type not identified here will not be allowed through the lg290pMessageEnabled() filter.
 const lg290pMsg lgMessagesPQTM[] = {
     // In order from the LG29xP Series GNSS Protocol Spec v1.2.0 20260109, Table 6
-    {"PQTMEPE", 2, 0, 255, 0},            // msgVer = 2
-    {"PQTMVEL", 1, 0, 255, 0},            //
-    {"PQTMGEOFENCESTATUS", 1, 0, 255, 0}, //
-    {"PQTMTXT", 1, 0, 255, 0},            //
-    // {"PQTMSVINSTATUS", 1, 0, 255, 0},      // Only available in Base mode
-    {"PQTMPVT", 1, 0, 255, 0}, //
-    {"PQTMDOP", 1, 0, 255, 0}, //
-    {"PQTMPL", 1, 0, 255, 0},  //
-    {"PQTMODO", 1, 0, 255, 0}, //
-    // {"PQTMTAR", 1, 0, 255, 201},           // Only available on LG580P
-    {"PQTMNAV", 1, 0, 255, 201}, // Added in v1.2.0 spec. Firmware v2.1 and above.
-    {"PQTMEOE", 1, 0, 255, 201}, // Added in v1.2.0 spec. Firmware v2.1 and above.
-    // {"PQTMANTENNASTATUS", 1, 0, 255, 201}, // Only supported on LG580P
-    {"PQTMENV", 1, 0, 255, 201},           // Added in v1.2.0 spec. Firmware v2.1 and above.
-    {"PQTMRTCMIS", 1, 0, 1, 201},          // Added in v1.2.0 spec. Firmware v2.1 and above.
-    {"PQTMPPPNAV", 1, 0, 255, 201},        // Added in v1.2.0 spec. Firmware v2.1 and above.
-    {"PQTMJAMMINGSTATUS", 1, 0, 255, 201}, // Added in v1.2.0 spec. Firmware v2.1 and above.
+    {"PQTMEPE", 2, 0, 255, false, 0},            // msgVer = 2
+    {"PQTMVEL", 1, 0, 255, false, 0},            //
+    {"PQTMGEOFENCESTATUS", 1, 0, 255, false, 0}, //
+    {"PQTMTXT", 1, 0, 255, false, 0},            //
+    // {"PQTMSVINSTATUS", 1, 0, 255, false, 0},      // Only available in Base mode
+    {"PQTMPVT", 1, 0, 255, false, 0}, //
+    {"PQTMDOP", 1, 0, 255, false, 0}, //
+    {"PQTMPL", 1, 0, 255, false, 0},  //
+    {"PQTMODO", 1, 0, 255, false, 0}, //
+    // {"PQTMTAR", 1, 0, 255, false, 201},           // Only available on LG580P
+    {"PQTMNAV", 1, 0, 255, false, 201}, // Added in v1.2.0 spec. Firmware v2.1 and above.
+    {"PQTMEOE", 1, 0, 255, false, 201}, // Added in v1.2.0 spec. Firmware v2.1 and above.
+    // {"PQTMANTENNASTATUS", 1, 0, 255, false, 201}, // Only supported on LG580P
+    {"PQTMENV", 1, 0, 255, false, 201},           // Added in v1.2.0 spec. Firmware v2.1 and above.
+    {"PQTMRTCMIS", 1, 0, 1, false, 201},          // Added in v1.2.0 spec. Firmware v2.1 and above.
+    {"PQTMPPPNAV", 1, 0, 255, false, 201},        // Added in v1.2.0 spec. Firmware v2.1 and above.
+    {"PQTMJAMMINGSTATUS", 1, 0, 255, false, 201}, // Added in v1.2.0 spec. Firmware v2.1 and above.
 };
 
 #define MAX_LG290P_NMEA_MSG (sizeof(lgMessagesNMEA) / sizeof(lg290pMsg))
@@ -336,6 +337,9 @@ class GNSS_LG290P : GNSS
     // Returns timing accuracy or zero if not online
     uint32_t getTimeAccuracy();
 
+    // Sets the pieces of the version number
+    bool getVersion(uint16_t &major, uint8_t &minor, uint8_t &patch, uint8_t &revision);
+
     // Returns full year, ie 2023, not 23.
     uint16_t getYear();
 
@@ -343,6 +347,10 @@ class GNSS_LG290P : GNSS
     bool gnssInBaseFixedMode();
     bool gnssInBaseSurveyInMode();
     bool gnssInRoverMode();
+
+    // Indicate if there are any additional settings specific to this GNSS
+    // This governs setGnssSpecificConfiguration() and menuGnssSpecificConfiguration()
+    bool hasGnssSpecificConfiguration();
 
     bool isBlocking();
 
@@ -394,6 +402,9 @@ class GNSS_LG290P : GNSS
 
     // Controls the constellations that are used to generate a fix and logged
     void menuConstellations();
+
+    // Configure any settings specific to this GNSS
+    void menuGnssSpecificConfiguration();
 
     void menuMessageBaseRtcm();
 
@@ -448,6 +459,9 @@ class GNSS_LG290P : GNSS
     // Inputs:
     //   elevationDegrees: The elevation value in degrees
     bool setElevation(uint8_t elevationDegrees);
+
+    // Configure any additional settings specific to this GNSS
+    bool setGnssSpecificConfiguration();
 
     bool setPppService();
 
@@ -518,7 +532,7 @@ bool lg290pGetSettingValue(RTK_Settings_Types type, const char *suffix, int qual
 bool lg290pIsPresentOnFacetFP();
 void lg290pNewClass();
 bool lg290pNewSettingValue(struct Settings * tempSettings, RTK_Settings_Types type, const char *suffix, int qualifier, double d);
-bool lg290pSettingsToFile(File *settingsFile, RTK_Settings_Types type, int settingsIndex);
+bool lg290pSettingsToFile(char * line, size_t lineSize, RTK_Settings_Types type, int settingsIndex);
 
 #endif // COMPILE_LG290P
 #endif // __GNSS_LG290P_H__

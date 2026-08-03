@@ -311,6 +311,9 @@ class GNSS_UM980 : GNSS
     // Returns timing accuracy or zero if not online
     uint32_t getTimeAccuracy();
 
+    // Sets the pieces of the version number
+    bool getVersion(uint16_t &major, uint8_t &minor, uint8_t &patch, uint8_t &revision);
+
     // Returns full year, ie 2023, not 23.
     uint16_t getYear();
 
@@ -506,7 +509,7 @@ bool um980CreateString(RTK_Settings_Types type, int settingsIndex, char *newSett
 bool um980GetSettingValue(RTK_Settings_Types type, const char *suffix, int settingsIndex, int qualifier,
                           char *settingValueStr);
 bool um980NewSettingValue(struct Settings * tempSettings, RTK_Settings_Types type, const char *suffix, int qualifier, double d);
-bool um980SettingsToFile(File *settingsFile, RTK_Settings_Types type, int settingsIndex);
+bool um980SettingsToFile(char * line, size_t lineSize, RTK_Settings_Types type, int settingsIndex);
 
 #endif // COMPILE_UM980
 #endif // __GNSS_UM980_H__

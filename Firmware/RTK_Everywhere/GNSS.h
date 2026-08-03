@@ -260,6 +260,9 @@ class GNSS
     // Returns timing accuracy or zero if not online
     virtual uint32_t getTimeAccuracy() { return 0; }
 
+    // Sets the four version number parts
+    virtual bool getVersion(uint16_t &major, uint8_t &minor, uint8_t &patch, uint8_t &revision);
+
     // Returns full year, ie 2023, not 23.
     virtual uint16_t getYear() { return 0; }
 
@@ -268,6 +271,10 @@ class GNSS
     virtual bool gnssInBaseFixedMode() { return false; }
     virtual bool gnssInBaseSurveyInMode() { return false; }
     virtual bool gnssInRoverMode() { return false; }
+
+    // Indicate if there are any additional settings specific to this GNSS
+    // This governs setGnssSpecificConfiguration() and menuGnssSpecificConfiguration()
+    virtual bool hasGnssSpecificConfiguration();
 
     // Antenna Short / Open detection
     virtual bool isAntennaShorted();
@@ -324,7 +331,10 @@ class GNSS
     // Controls the constellations that are used to generate a fix and logged
     virtual void menuConstellations() {}
 
-    virtual void menuMessageBaseRtcm() {}
+    // Configure any settings specific to this GNSS
+    virtual void menuGnssSpecificConfiguration();
+
+    virtual void menuMessageBaseRtcm();
 
     // Control the messages that get broadcast over Bluetooth and logged (if enabled)
     virtual void menuMessages() {}
@@ -378,7 +388,10 @@ class GNSS
     //   elevationDegrees: The elevation value in degrees
     virtual bool setElevation(uint8_t elevationDegrees) { return false; }
 
-    virtual bool setPppService() { return false; }
+    // Configure any additional settings specific to this GNSS
+    virtual bool setGnssSpecificConfiguration();
+
+    virtual bool setPppService();
 
     // Configure any logging settings - currently mosaic-X5 specific
     virtual bool setLogging() { return false; }
@@ -447,6 +460,9 @@ bool gnssCmdUpdateConstellations(const char *settingName, void *settingData, int
 // Update the message rates following a set command
 bool gnssCmdUpdateMessageRates(const char *settingName, void *settingData, int settingType);
 
+// Restore the GNSS to the factory settings
+void gnssFactoryReset();
+
 // Determine if the GNSS receiver is present
 typedef bool (*GNSS_PRESENT)();
 
@@ -471,7 +487,7 @@ typedef bool (*GNSS_GET_SETTING_VALUE)(RTK_Settings_Types type, const char *suff
 typedef bool (*GNSS_NEW_SETTING_VALUE)(struct Settings * tempSettings, RTK_Settings_Types type, const char *suffix, int qualifier, double d);
 
 // Write settings to a file
-typedef bool (*GNSS_SETTING_TO_FILE)(File *settingsFile, RTK_Settings_Types type, int settingsIndex);
+typedef bool (*GNSS_SETTING_TO_FILE)(char * line, size_t lineSize, RTK_Settings_Types type, int settingsIndex);
 
 typedef struct _GNSS_SUPPORT_ROUTINES
 {
